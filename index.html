@@ -516,8 +516,18 @@ async function checkUserRole(lineId) {
      */
     async function loadCriteriaForm() {
         try {
-            const res = await fetch(`${WEB_APP_URL}?action=getCriteriaForm`);
-            const data = await res.json();
+            // 🆕 v2.45: ใช้วิธีเดียวกับ checkUserRole — มี timeout และอ่านเป็นข้อความก่อนแปลง
+            // เพื่อให้รู้สาเหตุจริงเวลา Server ตอบไม่ใช่ JSON แทนข้อความกำกวมเดิม
+            const res = await fetchWithTimeout(`${WEB_APP_URL}?action=getCriteriaForm`, {}, 25000);
+            const rawText = await res.text();
+            let data;
+            try {
+                data = JSON.parse(rawText);
+            } catch (parseErr) {
+                const snippet = (rawText || '').replace(/\s+/g, ' ').trim().substring(0, 120);
+                throw new Error(`Server ตอบกลับไม่ใช่ JSON (HTTP ${res.status}) | ${snippet || 'ไม่มีเนื้อหา'}`);
+            }
+            if (!data.success) throw new Error(data.message || 'Server แจ้งว่าไม่สำเร็จ');
             if (data.success) {
                 cachedCriteriaForm = data.data;
                 const mainTypeSelect = document.getElementById('mainType');
@@ -531,7 +541,10 @@ async function checkUserRole(lineId) {
             }
         } catch (e) {
             console.error('โหลดโครงสร้างหัวข้อผลงานไม่สำเร็จ:', e);
-            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถโหลดโครงสร้างหัวข้อผลงานได้ กรุณาลองใหม่', 'error');
+            const detail = (e && (e.message || e.toString())) || 'ไม่ทราบสาเหตุ';
+            safeAlert('ไม่สามารถโหลดหัวข้อผลงานได้',
+                'กรุณาลองเปิดใหม่อีกครั้งครับ<br><br>' +
+                '<span style="font-size:12px;color:#888;word-break:break-all;">รายละเอียด: ' + detail + '</span>');
         }
     }
 
